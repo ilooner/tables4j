@@ -73,8 +73,81 @@ This runs the tests, compiles the examples, and generates the library, source, a
 Javadoc JARs in `build/libs/`. The examples are separate from the published library.
 On Windows, use `gradlew.bat` in place of `./gradlew`.
 
-The project configures Maven coordinates `com.ilooner:tables4j:0.1.0`, but does not
-configure a remote publishing repository. To use this checkout in another local project,
+The Maven coordinates are `com.ilooner:tables4j:0.1.0`. Releases are published to
+[GitHub Packages](https://github.com/ilooner/tables4j/packages) using the release
+workflow described under [Publishing](#publishing).
+
+### Install from GitHub Packages
+
+GitHub's Maven registry requires authentication even for public packages. Use a
+personal access token **(classic)** with `read:packages` and access to this repository.
+Keep credentials in your environment or your user-level `~/.gradle/gradle.properties`;
+do not commit them. See [GitHub's authentication documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-gradle-registry#authenticating-to-github-packages).
+
+In a consuming Gradle project:
+
+```groovy
+repositories {
+    mavenCentral()
+    maven {
+        url = uri('https://maven.pkg.github.com/ilooner/tables4j')
+        credentials {
+            username = providers.gradleProperty('gpr.user')
+                .orElse(providers.environmentVariable('GITHUB_ACTOR')).orNull
+            password = providers.gradleProperty('gpr.key')
+                .orElse(providers.environmentVariable('GITHUB_TOKEN')).orNull
+        }
+        content {
+            includeGroup 'com.ilooner'
+        }
+    }
+}
+
+dependencies {
+    implementation 'com.ilooner:tables4j:0.1.0'
+}
+```
+
+Set `GITHUB_ACTOR` to your GitHub username and `GITHUB_TOKEN` to your token, or use
+the `gpr.user` and `gpr.key` properties in your user-level Gradle configuration.
+
+For Maven, add the repository and dependency to your `pom.xml`:
+
+```xml
+<repositories>
+    <repository>
+        <id>github</id>
+        <url>https://maven.pkg.github.com/ilooner/tables4j</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>com.ilooner</groupId>
+        <artifactId>tables4j</artifactId>
+        <version>0.1.0</version>
+    </dependency>
+</dependencies>
+```
+
+Add a server with the matching ID to your user-level `~/.m2/settings.xml`, using
+the same environment variables:
+
+```xml
+<settings>
+    <servers>
+        <server>
+            <id>github</id>
+            <username>${env.GITHUB_ACTOR}</username>
+            <password>${env.GITHUB_TOKEN}</password>
+        </server>
+    </servers>
+</settings>
+```
+
+### Install a local checkout
+
+To use an unpublished checkout in another local project without GitHub credentials,
 publish it to your local Maven repository:
 
 ```sh
@@ -94,7 +167,7 @@ dependencies {
 }
 ```
 
-For Maven, after the same local publication step:
+For Maven, after the same local publication step, add this dependency to your POM:
 
 ```xml
 <dependency>
@@ -294,6 +367,48 @@ dependency is exposed through the library's public API.
 
 To run the animated demos without pauses, add `-PdemoDelay=0` to their Gradle command.
 The default delay between deployment events is 900 ms.
+
+## Publishing
+
+The [publishing workflow](.github/workflows/publish.yml) runs when a GitHub release
+is **published**. It uses Java 21, checks the release tag against `build.gradle`,
+runs the tests, builds the library, source, and Javadoc JARs, and publishes the Maven
+package to `https://maven.pkg.github.com/ilooner/tables4j`. Each JAR includes the
+Apache 2.0 license. Ordinary commits, tags without a published release, and draft
+releases do not publish packages.
+
+To publish the first version:
+
+1. Commit and push this publishing configuration to `main`.
+2. Confirm `version = '0.1.0'` in `build.gradle`, then run:
+
+   ```sh
+   ./gradlew verifyReleaseVersion clean build -PreleaseTag=v0.1.0 --warning-mode all
+   ```
+
+3. In the repository's **Releases** page, create and publish a release with tag
+   **`v0.1.0`**, targeting the commit containing this configuration.
+4. Check the **Publish to GitHub Packages** run in **Actions**. After it succeeds,
+   `com.ilooner:tables4j:0.1.0` is available in the repository's **Packages** section.
+
+The workflow uses the automatically supplied `GITHUB_TOKEN` with `packages: write`;
+no personal publishing token or additional repository secret is needed. Repository
+or organization policy must allow GitHub Actions and package publishing.
+
+For subsequent releases, update the version in `build.gradle` and the README examples,
+and use a matching `vVERSION` tag. Treat published versions as immutable: publish a
+new version for changes instead of rerunning a successful upload of the same version.
+
+To publish directly from your machine, configure `GITHUB_ACTOR` and `GITHUB_TOKEN`
+(or `gpr.user` and `gpr.key`) with a classic token that has `write:packages` and write
+access to this repository, then run:
+
+```sh
+./gradlew publishMavenJavaPublicationToGitHubPackagesRepository -PreleaseTag=v0.1.0
+```
+
+The direct publishing task also runs checks before upload. Build, test, and local
+Maven publication continue to work without GitHub credentials.
 
 <details>
 <summary>Regenerate the terminal recordings and GIFs</summary>

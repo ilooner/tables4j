@@ -81,7 +81,32 @@ tasks.named('check') {
     dependsOn tasks.named('examplesClasses')
 }
 
+def releaseTag = providers.gradleProperty('releaseTag')
+def expectedReleaseTag = "v${version}"
+
+tasks.register('verifyReleaseVersion') {
+    group = 'verification'
+    description = 'Checks that -PreleaseTag matches the project version (for example, v0.1.0).'
+    doLast {
+        if (releaseTag.orNull != expectedReleaseTag) {
+            throw new GradleException("Release tag must be '${expectedReleaseTag}'. Use -PreleaseTag=${expectedReleaseTag}.")
+        }
+    }
+}
+
 publishing {
+    repositories {
+        maven {
+            name = 'GitHubPackages'
+            url = uri('https://maven.pkg.github.com/ilooner/tables4j')
+            credentials {
+                username = providers.gradleProperty('gpr.user')
+                    .orElse(providers.environmentVariable('GITHUB_ACTOR')).orNull
+                password = providers.gradleProperty('gpr.key')
+                    .orElse(providers.environmentVariable('GITHUB_TOKEN')).orNull
+            }
+        }
+    }
     publications {
         mavenJava(MavenPublication) {
             from components.java
@@ -89,6 +114,11 @@ publishing {
             pom {
                 name = 'tables4j'
                 description = project.description
+                url = 'https://github.com/ilooner/tables4j'
+                scm {
+                    connection = 'scm:git:https://github.com/ilooner/tables4j.git'
+                    url = 'https://github.com/ilooner/tables4j'
+                }
                 licenses {
                     license {
                         name = 'Apache License, Version 2.0'
@@ -98,5 +128,12 @@ publishing {
                 }
             }
         }
+    }
+}
+
+tasks.named('publishMavenJavaPublicationToGitHubPackagesRepository') {
+    dependsOn tasks.named('check')
+    if (releaseTag.isPresent()) {
+        dependsOn tasks.named('verifyReleaseVersion')
     }
 }
