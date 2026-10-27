@@ -1,0 +1,102 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = 'com.ilooner'
+version = '0.1.0'
+description = 'Object-oriented terminal tables for Java.'
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+    withJavadocJar()
+}
+
+dependencies {
+    // The manual-table rendering API exposes AsciiTable to callers.
+    api 'de.vandermeer:asciitable:0.3.2'
+
+    implementation 'org.joda:joda-money:1.0.1'
+    implementation 'joda-time:joda-time:2.10.8'
+
+    testImplementation platform('org.junit:junit-bom:5.8.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Javadoc).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+tasks.withType(Jar).configureEach {
+    from('LICENSE') {
+        into 'META-INF'
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+sourceSets {
+    examples {
+        java.srcDir 'examples/src/main/java'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    examplesImplementation.extendsFrom implementation
+    examplesRuntimeOnly.extendsFrom runtimeOnly
+}
+
+[
+    demoInventory: 'InventoryCli',
+    demoStreaming: 'DeploymentCli',
+    demoWrapping: 'WrappingCli'
+].each { taskName, exampleClass ->
+    tasks.register(taskName, JavaExec) {
+        group = 'examples'
+        description = "Runs the ${exampleClass} example."
+        classpath = sourceSets.examples.runtimeClasspath
+        mainClass = "com.ilooner.tables4j.examples.${exampleClass}"
+        systemProperty 'demo.delay', providers.gradleProperty('demoDelay').getOrElse('900')
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('examplesClasses')
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = 'tables4j'
+            pom {
+                name = 'tables4j'
+                description = project.description
+                licenses {
+                    license {
+                        name = 'Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+            }
+        }
+    }
+}
