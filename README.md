@@ -77,6 +77,18 @@ The Maven coordinates are `com.ilooner:tables4j:0.1.0`. Releases are published t
 [GitHub Packages](https://github.com/ilooner/tables4j/packages) using the release
 workflow described under [Publishing](#publishing).
 
+### Download the JARs
+
+Each [GitHub release](https://github.com/ilooner/tables4j/releases) includes these
+downloads under **Assets** once its workflow completes:
+
+- `tables4j-VERSION.jar` — the compiled library.
+- `tables4j-VERSION-sources.jar` — the Java source.
+- `tables4j-VERSION-javadoc.jar` — the API documentation.
+
+The library JAR does not bundle its dependencies. Use the Maven or Gradle setup
+below to resolve those dependencies automatically.
+
 ### Install from GitHub Packages
 
 GitHub's Maven registry requires authentication even for public packages. Use a
@@ -371,8 +383,9 @@ The default delay between deployment events is 900 ms.
 ## Publishing
 
 The [publishing workflow](.github/workflows/publish.yml) runs when a GitHub release
-is **published**. It uses Java 21, checks the release tag against `build.gradle`,
-runs the tests, builds the library, source, and Javadoc JARs, and publishes the Maven
+is **published**. It checks out that release's tag, uses Java 21, checks the tag
+against `build.gradle`, runs the tests, and builds the library, source, and Javadoc
+JARs. It attaches all three JARs to the release's **Assets**, then publishes the Maven
 package to `https://maven.pkg.github.com/ilooner/tables4j`. Each JAR includes the
 Apache 2.0 license. Ordinary commits, tags without a published release, and draft
 releases do not publish packages.
@@ -388,16 +401,33 @@ To publish the first version:
 
 3. In the repository's **Releases** page, create and publish a release with tag
    **`v0.1.0`**, targeting the commit containing this configuration.
-4. Check the **Publish to GitHub Packages** run in **Actions**. After it succeeds,
+4. Check the **Publish release** run in **Actions**. After it succeeds, all three
+   JARs are downloadable from the release's **Assets**, and
    `com.ilooner:tables4j:0.1.0` is available in the repository's **Packages** section.
 
-The workflow uses the automatically supplied `GITHUB_TOKEN` with `packages: write`;
-no personal publishing token or additional repository secret is needed. Repository
-or organization policy must allow GitHub Actions and package publishing.
+The workflow uses the automatically supplied `GITHUB_TOKEN` with `contents: write`
+to attach release assets and `packages: write` to publish the Maven package. No
+personal publishing token or additional repository secret is needed. Repository or
+organization policy must allow GitHub Actions and package publishing.
 
 For subsequent releases, update the version in `build.gradle` and the README examples,
 and use a matching `vVERSION` tag. Treat published versions as immutable: publish a
 new version for changes instead of rerunning a successful upload of the same version.
+
+### Attach binaries to an existing release
+
+To repair a release such as `v0.1.0` that has no JAR downloads:
+
+1. Push the updated workflow to `main`.
+2. Open **Actions → Publish release → Run workflow** and select the `main` branch.
+3. Enter `v0.1.0` as **release_tag**, then run the workflow.
+
+The manual run builds the code at the selected **tag**, attaches only missing JARs,
+and skips Maven publication so an already-published package version is not uploaded
+again. Existing release assets are preserved. Use this new manual run to pick up
+the updated workflow; rerunning an older workflow run uses its original workflow.
+
+### Publish the Maven package from your machine
 
 To publish directly from your machine, configure `GITHUB_ACTOR` and `GITHUB_TOKEN`
 (or `gpr.user` and `gpr.key`) with a classic token that has `write:packages` and write
@@ -408,7 +438,8 @@ access to this repository, then run:
 ```
 
 The direct publishing task also runs checks before upload. Build, test, and local
-Maven publication continue to work without GitHub credentials.
+Maven publication continue to work without GitHub credentials. This Gradle command
+publishes only to the Maven registry; use the workflow to attach GitHub release assets.
 
 <details>
 <summary>Regenerate the terminal recordings and GIFs</summary>

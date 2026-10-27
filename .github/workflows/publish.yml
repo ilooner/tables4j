@@ -1,14 +1,20 @@
-name: Publish to GitHub Packages
+name: Publish release
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag to attach missing JARs to (for example, v0.1.0)'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: publish-${{ github.event.release.tag_name }}
+  group: publish-${{ github.event.release.tag_name || inputs.release_tag }}
   cancel-in-progress: false
 
 jobs:
@@ -17,14 +23,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: read
+      contents: write
       packages: write
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
     steps:
       - name: Check out the release
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
+          ref: refs/tags/${{ github.event.release.tag_name || inputs.release_tag }}
           persist-credentials: false
 
       - name: Set up Java 21
@@ -39,7 +46,31 @@ jobs:
       - name: Verify the release version and build
         run: ./gradlew verifyReleaseVersion build -PreleaseTag="$RELEASE_TAG" --warning-mode all --console=plain
 
+      - name: Attach missing JARs to the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          artifacts=(
+            "build/libs/tables4j-${version}.jar"
+            "build/libs/tables4j-${version}-sources.jar"
+            "build/libs/tables4j-${version}-javadoc.jar"
+          )
+          for artifact in "${artifacts[@]}"; do
+            test -f "$artifact"
+          done
+          existing_assets="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
+          for artifact in "${artifacts[@]}"; do
+            asset_name="${artifact##*/}"
+            if grep -Fxq -- "$asset_name" <<< "$existing_assets"; then
+              echo "Asset already exists: $asset_name"
+            else
+              gh release upload "$RELEASE_TAG" "$artifact" --repo "$GITHUB_REPOSITORY"
+            fi
+          done
+
       - name: Publish to GitHub Packages
+        if: github.event_name == 'release'
         run: ./gradlew publishMavenJavaPublicationToGitHubPackagesRepository -PreleaseTag="$RELEASE_TAG" --warning-mode all --console=plain
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
